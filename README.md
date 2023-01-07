@@ -1,0 +1,158 @@
+# :rocket: Como guardar datos en S3 - DynamoDB usando Funciones Lambda y el **Framework Serverles**
+
+! En este repositorio encontrarás información sobre cómo utilizar **AWS Lambda** y **AWS DynamoDB** para crear aplicaciones serverless.
+
+1. Para aprender más sobre cómo utilizar **[AWS Lambda](https://aws.amazon.com/es/lambda/)** y **[AWS DynamoDB](https://aws.amazon.com/es/dynamodb/)**, puede consultar la documentación oficial de Amazon Web Services. 
+2. También es recomendable echar un vistazo a la guía de **[serverless](https://www.serverless.com/)** y a la documentación de **[Node.js](https://nodejs.org/es/docs/)**. 
+3. Si necesita más información sobre los permisos necesarios para invocar funciones, puede consultar la sección de **[Controles de acceso](https://aws.amazon.com/es/iam/features/access-control/)** de IAM en AWS.
+
+````yml
+    service: serverless-lambda-crud-s3
+
+  frameworkVersion: '3'
+
+  # La sección apiGateway es una configuración opcional que se utiliza para configurar el API Gateway de AWS que se utilizará para exponer la aplicación. 
+  # La propiedad binaryMediaTypes es una lista de tipos de medios binarios que se permitirán en las solicitudes entrantes al API Gateway. 
+  # En este caso, se ha configurado para permitir el tipo de medio multipart/form-data, que se utiliza a menudo para enviar archivos a través de formularios HTML.
+  provider:
+    name: aws
+    runtime: nodejs12.x
+    region: us-east-1
+    environment:
+      TABLEDYNAMO: dynamodbtable3${opt:stage,'dev'}
+    apiGateway:
+      binaryMediaTypes:
+        - 'multipart/form-data'
+    
+  # La sección functions contiene una lista de todas las funciones que se desplegarán en AWS. En este caso, se está definiendo una función llamada "uploadFile".
+  # La propiedad handler especifica el nombre del archivo y el nombre de la función que se utilizará como manejador de la función. En este caso, el manejador es handler.uploadFile, 
+  # lo que significa que la función se encuentra en el archivo handler.js y la funcion es uploadFile.
+  # La sección events especifica cómo se llamara la función. En este caso, la función se activará cuando se realice una solicitud HTTP POST a la ruta /file/upload.
+  # La propiedad role especifica el nombre del rol de IAM que se asignará a la función. 
+  # El rol de IAM determina qué acciones puede realizar la función en AWS. En este caso, se ha especificado un rol llamado UploadRole.
+  # La sección environment es una lista de variables de entorno que se asignarán a la función. 
+  # En este caso, se está asignando una variable llamada BUCKET que contiene el nombre de un bucket de S3.
+  #  La variable utiliza la sintaxis ${opt:stage,'dev'} para especificar un valor predeterminado si la variable de entorno stage no está definida. 
+  # Esto significa que si stage no está definida, se usará el valor "dev" en su lugar.
+  functions:
+    uplaodFile:
+      handler: handler.uploadFile
+      events:
+        - http: POST /file/upload
+      environment:
+        BUCKET: wilmaruxstorage3${opt:stage,'dev'}    
+      role: UploadRole
+    dynamodbPut:
+      handler: dynamodbcrud.dynamodbPut
+      events:
+        - http: POST /file
+      role: UploadRole        
+    dynamodbUpdate:
+      handler: dynamodbcrud.dynamodbUpdate
+      events: 
+        - http: PUT /file
+      role: UploadRole
+    dynamodbDelete:
+      handler: dynamodbcrud.dynamodbDelete
+      events: 
+        - http: DELETE /file
+      role: UploadRole
+    dynamodbScan:
+      handler: dynamodbcrud.dynamodbScan
+      events: 
+        - http: GET /file
+      role: UploadRole
+
+  # La sección resources contiene una lista de todos los recursos que se crearán en AWS. 
+  # En este caso, se está definiendo un recurso de tipo AWS::S3::Bucket, que es un bucket de S3.
+  # La propiedad Type especifica el tipo de recurso que se está creando. 
+  # La propiedad Properties especifica una lista de propiedades que se asignarán al recurso. En este caso, se están asignando las propiedades BucketName y AccessControl.
+  # La propiedad BucketName especifica el nombre del bucket de S3. La variable ${opt:stage,'dev'} 
+  # se utiliza para especificar un valor predeterminado si la variable de entorno stage no está definida.
+  #  Esto significa que si stage no está definida, se usará el valor "dev" en su lugar.
+  # La propiedad AccessControl especifica el tipo de control de acceso que se aplicará al bucket. En este caso, se ha especificado PublicRead, 
+  # lo que significa que cualquier persona podrá leer los objetos del bucket.
+  resources:
+    Resources:
+      ModuslandBucket:
+        Type: AWS::S3::Bucket
+        Properties:
+          BucketName: wilmaruxstorage3${opt:stage,'dev'}
+          AccessControl: PublicRead
+
+  # El nombre de la tabla es "TableDynamoDB". La propiedad Type especifica el tipo de recurso que se está creando, en este caso una AWS::DynamoDB::Table. 
+  # La propiedad Properties especifica una lista de propiedades que se asignarán a la tabla.
+    # La propiedad TableName especifica el nombre de la tabla de DynamoDB. La variable ${opt:stage,'dev'} se utiliza para especificar un valor predeterminado 
+    # si la variable de entorno stage no está definida. Esto significa que si stage no está definida, se usará el valor "dev" en su lugar.
+    # La propiedad AttributeDefinitions especifica una lista de atributos y sus tipos de datos que se utilizarán en la tabla. 
+    # En este caso, se está definiendo un atributo llamado "id" de tipo "S" (cadena).
+    # La propiedad KeySchema especifica la clave principal de la tabla. En este caso, se está utilizando una clave de tipo "HASH" basada en el atributo "id".
+    # La propiedad ProvisionedThroughput especifica la tasa de rendimiento provisionada para la tabla. Esto incluye la capacidad de lectura y escritura por segundo. 
+    # En este caso, se ha especificado una capacidad de lectura y escritura de 1 por segundo.
+      TableDynamoDB:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: dynamodbtable3${opt:stage,'dev'}
+          AttributeDefinitions:
+            - AttributeName: id
+              AttributeType: S
+          KeySchema:
+            - AttributeName: id
+              KeyType: HASH
+          ProvisionedThroughput:
+            ReadCapacityUnits: 1
+            WriteCapacityUnits: 1
+# Crea un rol de IAM (Identity and Access Management, Gestión de Identidad y Acceso) llamado "UploadRole" que permite a las funciones de AWS Lambda asumir este rol.
+# La propiedad "AssumeRolePolicyDocument" especifica la política que permite a las funciones de AWS Lambda asumir el rol. La propiedad "Policies" es una lista de políticas adjuntas al rol.
+# La primera política permite al rol realizar cualquier acción en la tabla de DynamoDB cuya ARN (Amazon Resource Name, Nombre de Recurso de Amazon) 
+# se obtiene llamando a la función intrínseca GetAtt sobre el recurso "TableDynamoDB".
+# La segunda política permite al rol realizar cualquier acción en el bucket de S3 cuyo nombre se obtiene llamando a la función intrínseca Ref sobre el recurso "ModuslandBucket".
+# La función intrínseca Sub se utiliza para construir el ARN del bucket.
+# La tercera política permite al rol crear grupos de registros, flujos de registros y poner eventos de registro en CloudWatch Logs. 
+# El recurso especificado es un comodín que representa todos los grupos y flujos de registros en la región y cuenta actuales.
+      UploadRole:
+        Type: AWS::IAM::Role
+        Properties:
+          AssumeRolePolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Principal:
+                  Service:
+                    - lambda.amazonaws.com
+                Action: sts:AssumeRole
+          Policies:
+            - PolicyName: upload-policy
+              PolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                  - Effect: Allow
+                    Action: 
+                      - dynamodb:*
+                    Resource:
+                      !GetAtt TableDynamoDB.Arn
+                  - Effect: Allow
+                    Action:
+                      - s3:*
+                    Resource:
+                      !Sub
+                        - "arn:aws:s3:::${BucketName}/*"
+                        - {BucketName: !Ref ModuslandBucket}
+                  - Effect: Allow
+                    Action:
+                      - lambda:InvokeFunction
+                    Resource: arn:aws:lambda:us-east-1:AcountId:function:serverless-lambda-crud-s3-dev-dynamodbPut
+                      # Fn::Sub:
+                      #   - arn:aws:lambda:${Region}:${AccountId}:function:serverless-lambda-crud-s3-${opt:stage,'dev'}-dynamodbUpdate
+                      #   - { Region: !Ref AWS::Region, AccountId: !Ref AWS::AccountId }                   
+                  - Effect: Allow
+                    Action:
+                      - logs:CreateLogGroup
+                      - logs:CreateLogStream
+                      - logs:PutLogEvents
+                    Resource:
+                      Fn::Sub:
+                        - arn:aws:logs:${Region}:${AccountId}:log-group:/aws/lambda/*:*:*
+                        - { Region: !Ref AWS::Region, AccountId: !Ref AWS::AccountId }
+
+````
