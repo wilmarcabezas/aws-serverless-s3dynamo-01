@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "parse-multipart": "^1.0.4"
+    "parse-multipart": "^1.0.4",
+    "serverless-iam-roles-per-function": "^3.2.0"
   }
 }
